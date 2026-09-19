@@ -1,0 +1,11 @@
+{
+  "name": "MedPulse Premiere HMS",
+  "description": "A premium, full-stack Hospital Management System with role-based dashboards, real-time analytics, and futuristic UI design.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

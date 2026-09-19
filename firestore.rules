@@ -1,0 +1,198 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // -------------------------------------------------------------------------
+    // GLOBAL HELPERS
+    // -------------------------------------------------------------------------
+    function isSignedIn() { return request.auth != null; }
+    function isEmailVerified() { return request.auth.token.email_verified == true; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    
+    // Auth-based helpers
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    
+    // Role lookups - using get() which is safe for rules
+    function getUserData(uid) { return get(/databases/$(database)/documents/users/$(uid)).data; }
+    
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() { 
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             getUserRole() == 'admin';
+    }
+    function isDoctor() { 
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             getUserRole() == 'doctor';
+    }
+    function isReceptionist() { 
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             getUserRole() == 'receptionist';
+    }
+    function isPatient() { 
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             getUserRole() == 'patient';
+    }
+    function isStaff() { 
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             getUserRole() in ['admin', 'doctor', 'receptionist'];
+    }
+
+    // Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // USERS COLLECTION
+    // -------------------------------------------------------------------------
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'name', 'role', 'createdAt']) &&
+             data.uid == request.auth.uid &&
+             (data.email == null || (data.email is string && data.email.size() <= 100)) &&
+             data.role in ['admin', 'doctor', 'patient', 'receptionist'];
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && (isOwner(userId) || isAdmin() || isDoctor() || isReceptionist());
+      allow list: if isAdmin() || isReceptionist();
+      
+      allow create: if isSignedIn() && 
+                    isOwner(userId) && 
+                    isValidUser(incoming()) && 
+                    incoming().createdAt == request.time;
+      
+      allow update: if isSignedIn() && (
+        // Admin can update anyone
+        isAdmin() || 
+        // User can update self but cannot change role
+        (isOwner(userId) && 
+         incoming().role == existing().role && 
+         incoming().uid == existing().uid &&
+         incoming().createdAt == existing().createdAt)
+      );
+    }
+
+    // -------------------------------------------------------------------------
+    // APPOINTMENTS
+    // -------------------------------------------------------------------------
+    function isValidAppointment(data) {
+      return data.keys().hasAll(['patientId', 'date', 'time', 'status', 'createdAt']) &&
+             isValidId(data.patientId) &&
+             data.status in ['pending', 'confirmed', 'cancelled', 'completed', 'scheduled', 'waiting'] &&
+             data.createdAt == request.time;
+    }
+
+    match /appointments/{appointmentId} {
+      allow get: if isSignedIn() && (
+        isAdmin() || isReceptionist() ||
+        isOwner(existing().patientId) || 
+        isOwner(existing().doctorId)
+      );
+      
+      allow list: if isSignedIn();
+
+      allow create: if isSignedIn() && isValidAppointment(incoming());
+      
+      allow update: if isSignedIn() && (
+        isAdmin() || isReceptionist() ||
+        (isDoctor() && isOwner(existing().doctorId)) ||
+        (isPatient() && isOwner(existing().patientId))
+      ) && incoming().createdAt == existing().createdAt &&
+          incoming().patientId == existing().patientId;
+    }
+
+    // -------------------------------------------------------------------------
+    // BILLING & RECORDS
+    // -------------------------------------------------------------------------
+    match /billing/{billId} {
+      allow read: if isSignedIn() && (isAdmin() || isReceptionist() || isOwner(existing().patientId));
+      allow write: if isAdmin() || isReceptionist();
+    }
+
+    match /records/{recordId} {
+      allow read: if isSignedIn() && (isAdmin() || isOwner(existing().doctorId) || isOwner(existing().patientId));
+      allow write: if isAdmin() || isDoctor();
+    }
+
+    // -------------------------------------------------------------------------
+    // SYSTEM COLLECTIONS
+    // -------------------------------------------------------------------------
+    match /logs/{logId} {
+      allow list: if isAdmin();
+      allow create: if isSignedIn();
+    }
+
+    match /departments/{deptId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // -------------------------------------------------------------------------
+    // NOTIFICATIONS
+    // -------------------------------------------------------------------------
+    function isValidNotification(data) {
+      return data.keys().hasAll(['userId', 'title', 'message', 'type', 'read', 'createdAt']) &&
+             isValidId(data.userId) &&
+             data.type in ['info', 'success', 'warning', 'error'] &&
+             data.read is bool &&
+             data.createdAt == request.time;
+    }
+
+    match /notifications/{notifId} {
+      allow get: if isSignedIn() && isOwner(existing().userId);
+      allow list: if isSignedIn() && (isAdmin() || resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn(); 
+      allow update: if isSignedIn() && isOwner(existing().userId) && 
+                    incoming().userId == existing().userId &&
+                    incoming().createdAt == existing().createdAt &&
+                    incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+    }
+
+    // -------------------------------------------------------------------------
+    // BEDS
+    // -------------------------------------------------------------------------
+    match /beds/{bedId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow delete: if isSignedIn() && isStaff();
+      allow update: if isSignedIn() && isStaff();
+    }
+
+    // -------------------------------------------------------------------------
+    // BED SUBSCRIPTIONS
+    // -------------------------------------------------------------------------
+    match /bedSubscriptions/{subId} {
+      allow read: if isSignedIn() && (isAdmin() || isOwner(resource.data.userId));
+      allow create: if isSignedIn() && isOwner(request.resource.data.userId);
+      allow delete: if isSignedIn() && isOwner(existing().userId);
+    }
+    // -------------------------------------------------------------------------
+    // BED HISTORY
+    // -------------------------------------------------------------------------
+    match /bedHistory/{histId} {
+      allow read: if isSignedIn() && isStaff();
+      allow create: if isSignedIn() && isStaff();
+    }
+    // -------------------------------------------------------------------------
+    // BED REQUESTS
+    // -------------------------------------------------------------------------
+    match /bedRequests/{reqId} {
+      allow read: if isSignedIn() && (
+        (resource.data.userId == request.auth.uid) || 
+        isAdmin() || 
+        isStaff()
+      );
+      allow create: if isSignedIn() && (request.resource.data.userId == request.auth.uid);
+      allow update, delete: if isSignedIn() && (isAdmin() || isStaff());
+    }
+  }
+}

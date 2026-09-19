@@ -1,0 +1,268 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Core user profile for all roles",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phoneNumber": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "doctor", "patient", "receptionist"] },
+        "profilePic": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "name", "role", "createdAt"]
+    },
+    "Doctor": {
+      "title": "Doctor",
+      "description": "Doctor specific details",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "specialization": { "type": "string" },
+        "departmentId": { "type": "string" },
+        "bio": { "type": "string" },
+        "rating": { "type": "number" },
+        "availability": {
+          "type": "object",
+          "description": "Weekly schedule e.g., { 'monday': ['09:00', '17:00'] }"
+        }
+      },
+      "required": ["userId", "specialization", "departmentId"]
+    },
+    "Patient": {
+      "title": "Patient",
+      "description": "Patient specific details",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "bloodGroup": { "type": "string" },
+        "address": { "type": "string" },
+        "emergencyContact": { "type": "string" },
+        "medicalHistory": { "type": "string" }
+      },
+      "required": ["userId"]
+    },
+    "Department": {
+      "title": "Department",
+      "description": "Hospital departments",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "headId": { "type": "string", "description": "User ID of the department head" }
+      },
+      "required": ["name"]
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "Booking between patient and doctor",
+      "type": "object",
+      "properties": {
+        "patientId": { "type": "string" },
+        "doctorId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "time": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "cancelled", "completed"] },
+        "reason": { "type": "string" },
+        "type": { "type": "string", "enum": ["regular", "emergency"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "deletedAt": { "type": "string", "format": "date-time", "description": "Timestamp for soft delete" }
+      },
+      "required": ["patientId", "doctorId", "date", "time", "status", "createdAt"]
+    },
+    "Billing": {
+      "title": "Billing",
+      "description": "Invoices and payments",
+      "type": "object",
+      "properties": {
+        "patientId": { "type": "string" },
+        "appointmentId": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["unpaid", "paid"] },
+        "items": { "type": "array", "items": { "type": "object" } },
+        "paidAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "deletedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["patientId", "amount", "status", "createdAt"]
+    },
+    "MedicalRecord": {
+      "title": "Medical Record",
+      "description": "Patient medical data",
+      "type": "object",
+      "properties": {
+        "patientId": { "type": "string" },
+        "doctorId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "diagnosis": { "type": "string" },
+        "prescription": { "type": "string" },
+        "attachments": { "type": "array", "items": { "type": "object" } },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "deletedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["patientId", "doctorId", "diagnosis", "createdAt"]
+    },
+    "ActivityLog": {
+      "title": "Activity Log",
+      "description": "Logs for user actions",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "action": { "type": "string" },
+        "module": { "type": "string" },
+        "details": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "action", "module", "timestamp"]
+    },
+    "AuditTrail": {
+      "title": "Audit Trail",
+      "description": "Immutable record of sensitive operations",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "operation": { "type": "string" },
+        "documentPath": { "type": "string" },
+        "oldValue": { "type": "object" },
+        "newValue": { "type": "object" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "operation", "timestamp"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Real-time user notifications",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string", "enum": ["info", "success", "warning", "error"] },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "message", "type", "read", "createdAt"]
+    },
+    "BedSubscription": {
+      "title": "Bed Subscription",
+      "description": "User subscription for bed availability",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "ward": { "type": "string" },
+        "bedType": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "ward", "bedType", "createdAt"]
+    },
+    "Bed": {
+      "title": "Bed",
+      "description": "Hospital bed inventory and status",
+      "type": "object",
+      "properties": {
+        "number": { "type": "string" },
+        "ward": { "type": "string" },
+        "department": { "type": "string" },
+        "status": { "type": "string", "enum": ["vacant", "occupied", "cleaning", "maintenance"] },
+        "patientId": { "type": "string" },
+        "patientName": { "type": "string" },
+        "type": { "type": "string", "enum": ["General", "ICU", "Emergency", "Pediatric"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["number", "ward", "department", "status", "type"]
+    },
+    "BedHistory": {
+      "title": "Bed History",
+      "description": "Activity log for bed status changes",
+      "type": "object",
+      "properties": {
+        "bedId": { "type": "string" },
+        "bedNumber": { "type": "string" },
+        "action": { "type": "string" },
+        "status": { "type": "string" },
+        "patientName": { "type": "string" },
+        "performedBy": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["bedId", "action", "timestamp"]
+    },
+    "BedRequest": {
+      "title": "Bed Request",
+      "description": "Admission or bed booking requests from patients",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "patientName": { "type": "string" },
+        "bedType": { "type": "string" },
+        "preferredWard": { "type": "string" },
+        "reason": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "patientName", "bedType", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "doctors": {
+      "schema": "Doctor",
+      "description": "Doctor metadata"
+    },
+    "patients": {
+      "schema": "Patient",
+      "description": "Patient metadata"
+    },
+    "departments": {
+      "schema": "Department",
+      "description": "Hospital departments"
+    },
+    "appointments": {
+      "schema": "Appointment",
+      "description": "Appointment records"
+    },
+    "billing": {
+      "schema": "Billing",
+      "description": "Billing records"
+    },
+    "medicalRecords": {
+      "schema": "MedicalRecord",
+      "description": "Medical records"
+    },
+    "logs": {
+      "schema": "ActivityLog",
+      "description": "Application logs"
+    },
+    "audit": {
+      "schema": "AuditTrail",
+      "description": "System audit trail"
+    },
+    "notifications": {
+      "schema": "Notification",
+      "description": "User notifications"
+    },
+    "beds": {
+      "schema": "Bed",
+      "description": "Hospital bed inventory"
+    },
+    "bedSubscriptions": {
+      "schema": "BedSubscription",
+      "description": "User subscriptions for bed availability"
+    },
+    "bedHistory": {
+      "schema": "BedHistory",
+      "description": "Audit log for bed changes"
+    },
+    "bedRequests": {
+      "schema": "BedRequest",
+      "description": "Admission requests from patients"
+    }
+  }
+}
